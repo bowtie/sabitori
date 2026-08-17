@@ -1,0 +1,52 @@
+{
+  "$schema": "https://github.com/longbridge/gpui-component/raw/refs/heads/main/.theme-schema.json",
+  "name": "Sabitori",
+  "author": "Sabitori",
+  "url": "",
+  "themes": [
+    {
+      "name": "Sabitori Dark",
+      "mode": "dark",
+      "colors": {
+        "background": "#1f1f1f",
+        "border": "#525252",
+        "input.border": "#525252",
+        "ring": "#529ce0",
+        "foreground": "#e6e6e6",
+        "muted.foreground": "#bfbfbf",
+        "primary.background": "#529ce0",
+        "primary.hover.background": "#5ea9ed",
+        "primary.active.background": "#3383cc",
+        "primary.foreground": "#ffffff",
+        "accent.background": "#529ce0",
+        "accent.foreground": "#ffffff",
+        "secondary.background": "#404040",
+        "secondary.hover.background": "#525252",
+        "secondary.active.background": "#3a3a3a",
+        "secondary.foreground": "#e6e6e6"
+      }
+    },
+    {
+      "name": "Sabitori Light",
+      "mode": "light",
+      "colors": {
+        "background": "#fafafa",
+        "border": "#c7c7c7",
+        "input.border": "#c7c7c7",
+        "ring": "#418fd7",
+        "foreground": "#1f1f1f",
+        "muted.foreground": "#4d4d4d",
+        "primary.background": "#418fd7",
+        "primary.hover.background": "#4d9ce6",
+        "primary.active.background": "#2e76b8",
+        "primary.foreground": "#ffffff",
+        "accent.background": "#418fd7",
+        "accent.foreground": "#ffffff",
+        "secondary.background": "#e0e0e0",
+        "secondary.hover.background": "#d1d1d1",
+        "secondary.active.background": "#c9c9c9",
+        "secondary.foreground": "#1f1f1f"
+      }
+    }
+  ]
+}
