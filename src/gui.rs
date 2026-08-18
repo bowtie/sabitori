@@ -6,7 +6,7 @@ use gpui::prelude::FluentBuilder;
 use gpui::{
     div, point, px, svg, Animation, AnimationExt, App, AppContext, Application,
     Context, FocusHandle, Hsla, InteractiveElement, IntoElement, KeyDownEvent,
-    MouseButton, MouseDownEvent, MouseUpEvent, ParentElement,
+    ParentElement,
     Pixels, Rgba, Render, SharedString, StatefulInteractiveElement, Styled, Subscription, Window,
     WindowHandle, WindowOptions, ease_out_quint,
 };
@@ -18,7 +18,7 @@ use windows::Win32::Graphics::Dwm::{
 };
 use windows::Win32::UI::HiDpi::GetDpiForSystem;
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetClientRect, GetWindowLongPtrW, GetWindowRect, SetWindowLongPtrW, SetWindowPos,
+    GetWindowLongPtrW, GetWindowRect, SetWindowLongPtrW, SetWindowPos,
     SystemParametersInfoW, GWL_EXSTYLE, GWL_STYLE, HWND_TOPMOST, SPI_GETWORKAREA, SWP_FRAMECHANGED,
     SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, SWP_NOSIZE, WINDOW_EX_STYLE, WINDOW_STYLE,
     WS_CAPTION, WS_EX_CLIENTEDGE, WS_EX_WINDOWEDGE, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_SYSMENU,

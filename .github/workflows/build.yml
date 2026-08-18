@@ -1,0 +1,30 @@
+name: Build
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Zip artifact
+        run: Compress-Archive -Path target/release/sabitori.exe -DestinationPath sabitori-windows-x64.zip
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: sabitori-windows-x64.zip

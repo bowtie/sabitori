@@ -12,20 +12,30 @@
 //! flushes at its clean shutdown points. At init an oversized log is
 //! truncated so the file cannot grow unbounded.
 
+#[cfg(debug_assertions)]
 use std::fs::{self, OpenOptions};
+#[cfg(debug_assertions)]
 use std::io::{self, BufWriter, Write};
+#[cfg(debug_assertions)]
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
+#[cfg(debug_assertions)]
+use std::sync::Mutex;
+#[cfg(debug_assertions)]
+use std::sync::OnceLock;
+#[cfg(debug_assertions)]
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// The log is capped at roughly 1 MiB; on init an oversized file is truncated
 /// so it cannot grow unbounded.
+#[cfg(debug_assertions)]
 const MAX_LOG_BYTES: u64 = 1024 * 1024;
 /// How often the background flusher pushes buffered lines to disk. Keeping
 /// this small bounds the data-loss tail on a hard kill.
+#[cfg(debug_assertions)]
 const FLUSH_INTERVAL: Duration = Duration::from_millis(1000);
 
 /// Path to the log file, next to the executable (same convention as config).
+#[cfg(debug_assertions)]
 fn log_path() -> PathBuf {
     let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("sabitori.exe"));
     let dir = exe.parent().unwrap_or_else(|| std::path::Path::new("."));
@@ -35,10 +45,12 @@ fn log_path() -> PathBuf {
 /// The process-lifetime log file: a buffered writer opened once in append
 /// mode. Opening truncates an oversized file, so the log cannot grow
 /// unbounded.
+#[cfg(debug_assertions)]
 struct LogFile {
     writer: Box<dyn Write + Send>,
 }
 
+#[cfg(debug_assertions)]
 impl LogFile {
     /// Open the log at `path` for appending, truncating it first if it has
     /// grown past the cap. A missing file is created.
@@ -167,11 +179,16 @@ mod tests {
 }
 
 /// The process-lifetime writer, lazily initialized on the first log call.
+#[cfg(debug_assertions)]
 static WRITER: OnceLock<Mutex<LogFile>> = OnceLock::new();
 /// Guards the one-time spawn of the background flusher thread.
+#[cfg(debug_assertions)]
 static FLUSHER_SPAWNED: OnceLock<()> = OnceLock::new();
 
 /// Append a timestamped line to the log file.
+/// In release builds, logging is disabled — the function is a no-op
+/// so no log file is created and no flusher thread is spawned.
+#[cfg(debug_assertions)]
 pub fn log(msg: &str) {
     // Lazily start the background flusher and open the log (truncating an
     // oversized one), once, on first use.
@@ -184,8 +201,12 @@ pub fn log(msg: &str) {
     }
 }
 
+#[cfg(not(debug_assertions))]
+pub fn log(_msg: &str) {}
+
 /// Push buffered lines to disk. Called from the app's clean shutdown points
 /// and by the background flusher; a no-op before the first log call.
+#[cfg(debug_assertions)]
 pub fn flush() {
     if let Some(writer) = WRITER.get() {
         if let Ok(mut guard) = writer.lock() {
@@ -194,9 +215,13 @@ pub fn flush() {
     }
 }
 
+#[cfg(not(debug_assertions))]
+pub fn flush() {}
+
 /// Spawn the detached thread that flushes the buffer about once per second.
 /// A spawn failure is ignored, flushing then falls back to `BufWriter`'s
 /// overflow flush plus the app's shutdown flushes.
+#[cfg(debug_assertions)]
 fn spawn_flusher() {
     let _ = std::thread::Builder::new()
         .name("sabitori-log-flusher".to_string())
