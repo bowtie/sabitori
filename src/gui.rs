@@ -5,7 +5,8 @@ use std::time::{Duration, Instant};
 use gpui::prelude::FluentBuilder;
 use gpui::{
     div, point, px, svg, Animation, AnimationExt, App, AppContext, Application,
-    Context, FocusHandle, Hsla, InteractiveElement, IntoElement, KeyDownEvent, ParentElement,
+    Context, FocusHandle, Hsla, InteractiveElement, IntoElement, KeyDownEvent,
+    MouseButton, MouseDownEvent, MouseUpEvent, ParentElement,
     Pixels, Rgba, Render, SharedString, StatefulInteractiveElement, Styled, Subscription, Window,
     WindowHandle, WindowOptions, ease_out_quint,
 };
@@ -28,7 +29,7 @@ use crate::config::{Config, WheelMode, DIR_LOCK_TIMEOUT_MAX_MS, DIR_LOCK_TIMEOUT
 use crate::hook::{HookStatus, SharedState};
 use crate::theme;
 use gpui_component::button::{
-    Button, ButtonCustomVariant, ButtonGroup, ButtonVariants,
+    Button, ButtonCustomVariant, ButtonVariants,
 };
 use gpui_component::checkbox::Checkbox;
 use gpui_component::{ActiveTheme, Disableable, Selectable};
@@ -505,6 +506,9 @@ pub struct SettingsView {
     /// When we last checked the registry for autostart status (Unix seconds).
     /// Throttles the registry read to once per second.
     last_autostart_check: Option<u64>,
+    /// Direction of the stepper button currently being held (-1, +1, or 0).
+    /// Set on mouse down, cleared on mouse up; a timer reads this to repeat.
+    stepper_holding: i32,
 }
 
 impl SettingsView {
@@ -558,6 +562,7 @@ impl SettingsView {
             shared,
             on_config_change,
             last_autostart_check: None,
+            stepper_holding: 0,
         }
     }
 
@@ -762,6 +767,37 @@ impl SettingsView {
     fn step_timeout(&mut self, delta: i32) {
         self.focused_slider = Some(SliderKind::Timeout);
         self.nudge_focused(delta);
+    }
+
+    /// Start holding a stepper button. Immediately steps by 10, then
+    /// spawns a timer that repeats every 250ms while the button is held.
+    fn start_hold(&mut self, direction: i32, cx: &mut Context<Self>) {
+        self.stepper_holding = direction;
+        self.step_timeout(direction * 2); // ±10 (nudge_step is 5)
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            // Initial delay before repeating starts.
+            gpui::Timer::after(Duration::from_millis(400)).await;
+            loop {
+                let holding = this.read_with(cx, |this, _| this.stepper_holding).ok();
+                if holding != Some(direction) {
+                    break;
+                }
+                this.update(cx, |this, cx| {
+                    this.step_timeout(direction * 2);
+                    cx.notify();
+                })
+                .ok();
+                gpui::Timer::after(Duration::from_millis(250)).await;
+            }
+        })
+        .detach();
+    }
+
+    /// Stop holding a stepper button.
+    fn stop_hold(&mut self, cx: &mut Context<Self>) {
+        self.stepper_holding = 0;
+        cx.notify();
     }
 
     /// Move keyboard focus to the next/previous visible slider (Tab/Shift-Tab).
@@ -969,6 +1005,10 @@ impl Render for SettingsView {
                                                 .text_color(if lock_active { lock_theme.text_on_accent } else { lock_theme.text_primary })
                                         })
                                         .cursor_pointer()
+                                        .tooltip(move |_window, _cx| {
+                                            gpui_component::tooltip::Tooltip::new("Scroll Lock")
+                                                .build(_window, _cx)
+                                        })
                                         .on_click(cx.listener(|this, _event, _window, cx| {
                                             this.wheel_mode = if this.wheel_mode == WheelMode::Disable {
                                                 WheelMode::Off
@@ -1032,6 +1072,10 @@ impl Render for SettingsView {
                                             .text_color(if enabled { theme.text_on_accent } else { theme.text_primary })
                                     })
                                     .cursor_pointer()
+                                    .tooltip(move |_window, _cx| {
+                                        gpui_component::tooltip::Tooltip::new("Direction Lock")
+                                            .build(_window, _cx)
+                                    })
                                     .on_click(cx.listener(|this, _event, _window, cx| {
                                         this.wheel_mode = if this.wheel_mode == WheelMode::DirectionLock {
                                             WheelMode::Off
@@ -1169,34 +1213,65 @@ fn stepper_row(
         .hover(t.control_bg_hover)
         .active(t.control_bg_hover);
 
-    // − and + stepper buttons.
-    let minus_btn = Button::new("step-minus")
-        .custom(variant)
-        .label("−")
-        .w(px(28.))
-        .h(px(28.))
-        .px(px(0.))
-        .text_color(t.text_primary)
-        .rounded(px(6.))
-        .disabled(!enabled)
-        .on_click(cx.listener(move |this, _event: &gpui::ClickEvent, _window, cx| {
-            this.step_timeout(-1);
-            cx.notify();
-        }));
+    // − and + stepper buttons. Wrapped in divs that handle
+    // mouse down/up for hold-to-repeat behavior (±10 per repeat).
+    let minus_btn = div()
+        .on_mouse_down(
+            gpui::MouseButton::Left,
+            cx.listener(move |this, _event: &gpui::MouseDownEvent, _window, cx| {
+                this.start_hold(-1, cx);
+            }),
+        )
+        .on_mouse_up(
+            gpui::MouseButton::Left,
+            cx.listener(move |this, _event: &gpui::MouseUpEvent, _window, cx| {
+                this.stop_hold(cx);
+            }),
+        )
+        .child(
+            Button::new("step-minus")
+                .custom(variant)
+                .label("−")
+                .w(px(28.))
+                .h(px(28.))
+                .px(px(0.))
+                .text_color(t.text_primary)
+                .rounded_tl(cx.theme().radius)
+                .rounded_bl(cx.theme().radius)
+                .rounded_tr(px(0.))
+                .rounded_br(px(0.))
+                .border_r_0()
+                .disabled(!enabled),
+        );
 
-    let plus_btn = Button::new("step-plus")
-        .custom(variant)
-        .label("+")
-        .w(px(28.))
-        .h(px(28.))
-        .px(px(0.))
-        .text_color(t.text_primary)
-        .rounded(px(6.))
-        .disabled(!enabled)
-        .on_click(cx.listener(move |this, _event: &gpui::ClickEvent, _window, cx| {
-            this.step_timeout(1);
-            cx.notify();
-        }));
+    let plus_btn = div()
+        .on_mouse_down(
+            gpui::MouseButton::Left,
+            cx.listener(move |this, _event: &gpui::MouseDownEvent, _window, cx| {
+                this.start_hold(1, cx);
+            }),
+        )
+        .on_mouse_up(
+            gpui::MouseButton::Left,
+            cx.listener(move |this, _event: &gpui::MouseUpEvent, _window, cx| {
+                this.stop_hold(cx);
+            }),
+        )
+        .child(
+            Button::new("step-plus")
+                .custom(variant)
+                .label("+")
+                .w(px(28.))
+                .h(px(28.))
+                .px(px(0.))
+                .text_color(t.text_primary)
+                .rounded_tr(cx.theme().radius)
+                .rounded_br(cx.theme().radius)
+                .rounded_tl(px(0.))
+                .rounded_bl(px(0.))
+                .border_l_0()
+                .disabled(!enabled),
+        );
 
     // Middle button: the value chip. When editing, `.selected(true)`
     // paints it with the accent color so it reads as active. Clicking
@@ -1213,11 +1288,12 @@ fn stepper_row(
             t.text_secondary
         })
         .selected(editing)
-        .rounded(px(6.))
+        .rounded(px(0.))
         .disabled(!enabled)
         .when(enabled, |this: Button| {
-            this.on_click(cx.listener(move |this, _event: &gpui::ClickEvent, _window, cx| {
+            this.on_click(cx.listener(move |this, _event: &gpui::ClickEvent, window, cx| {
                 this.start_edit(kind);
+                this.focus_handle.focus(window);
                 cx.notify();
             }))
         });
@@ -1232,8 +1308,16 @@ fn stepper_row(
         .when(!enabled, |this: gpui::Div| this.opacity(0.4))
         .child(div().text_color(t.text_secondary).child(kind.label().into_element()))
         .child(
-            ButtonGroup::new("timeout-group")
-                .compact()
+            div()
+                .id("timeout-group")
+                .flex()
+                .flex_row()
+                .items_center()
+                .rounded_tl(cx.theme().radius)
+                .rounded_bl(cx.theme().radius)
+                .rounded_tr(cx.theme().radius)
+                .rounded_br(cx.theme().radius)
+                .overflow_hidden()
                 .child(minus_btn)
                 .child(value_btn)
                 .child(plus_btn),
@@ -1404,30 +1488,20 @@ pub fn open_settings_window(
                     // size. GPUI created the window with border offsets
                     // baked in; now that borders are gone, the window is
                     // too large, leaving acrylic visible around the card.
+                    let scale = system_scale();
+                    let target_w = (f32::from(size.width) * scale) as i32;
+                    let target_h = (f32::from(size.height) * scale) as i32;
                     let mut rc = RECT::default();
                     if GetWindowRect(hwnd, &mut rc).is_ok() {
-                        let mut client = RECT::default();
-                        let _ = GetClientRect(hwnd, &mut client);
-                        let dx = (rc.right - rc.left) - (client.right - client.left);
-                        let dy = (rc.bottom - rc.top) - (client.bottom - client.top);
-                        if dx > 0 || dy > 0 {
-                            // Shrink the window by the non-client delta,
-                            // keeping the bottom-right corner fixed (the
-                            // flyout grows upward from the tray).
-                            let new_w = (rc.right - rc.left) - dx;
-                            let new_h = (rc.bottom - rc.top) - dy;
-                            let new_left = rc.left + (dx / 2);
-                            let new_top = rc.top + (dy / 2) - dy; // shift up by bottom border
-                            let _ = SetWindowPos(
-                                hwnd,
-                                None,
-                                new_left,
-                                new_top,
-                                new_w,
-                                new_h,
-                                SWP_FRAMECHANGED | SWP_NOZORDER | SWP_NOACTIVATE,
-                            );
-                        }
+                        let _ = SetWindowPos(
+                            hwnd,
+                            None,
+                            rc.left,
+                            rc.top,
+                            target_w,
+                            target_h,
+                            SWP_FRAMECHANGED | SWP_NOZORDER | SWP_NOACTIVATE,
+                        );
                     }
                     let _ = SetWindowPos(
                         hwnd,
@@ -1543,10 +1617,10 @@ impl Render for TrayMenuView {
             .size_full()
             .flex()
             .flex_col()
-            .pt(px(8.))
-            .pb(px(4.))
+            .pt(px(9.))
+            .pb(px(2.))
             .px(px(2.))
-            .gap(px(2.))
+            .gap(px(4.))
             .font_family("Inter")
             .text_sm()
             .text_color(t.text_primary)
@@ -1556,20 +1630,6 @@ impl Render for TrayMenuView {
                 }
             }))
             .child(settings_item)
-            // Divider between Settings and Quit, full width with small
-            // vertical margin, using a visible border color.
-            .child(
-                div()
-                    .h(px(1.))
-                    .w_full()
-                    .my(px(2.))
-                    .bg(Hsla {
-                        h: t.border.h,
-                        s: t.border.s,
-                        l: t.border.l,
-                        a: 0.8,
-                    }),
-            )
             .child(quit_item)
             // Fade-in on open only. Dismiss is instant.
             .with_animation(
@@ -1635,8 +1695,8 @@ fn menu_item_row(
                 .child(
                     svg()
                         .path(icon_path)
-                        .w(px(18.))
-                        .h(px(18.))
+                        .w(px(20.))
+                        .h(px(20.))
                         .text_color(t.text_secondary),
                 ),
         )
@@ -1690,15 +1750,19 @@ pub fn show_tray_menu(cx: &mut App, shared: Arc<SharedState>) {
     let logical_x = cur_x as f32 / scale;
     let logical_y = cur_y as f32 / scale;
 
-    // Menu dimensions: two items at 36px + 1px divider + 2px my + 2px gap
-    // + 8px top padding + 4px bottom padding.
+    // Menu dimensions: two items at 36px + 4px gap + 9px top + 2px bottom.
     const MENU_W: f32 = 148.0;
-    const MENU_H: f32 = 2.0 * 36.0 + 1.0 + 2.0 * 2.0 + 2.0 * 2.0 + 8.0 + 4.0;
+    const MENU_H: f32 = 2.0 * 36.0 + 4.0 + 9.0 + 2.0;
 
-    // Position: open upward and to the left from the cursor, like a
-    // right-click context menu. Clamp so it stays on screen.
+    // Position: open upward and to the right from the cursor, like a
+    // native tray context menu. Clamp so it stays on screen.
     let work = primary_work_area();
-    let x = (logical_x - MENU_W).max(work.left as f32 / scale);
+    let work_right = work.right as f32 / scale;
+    let x = if logical_x + MENU_W > work_right {
+        (work_right - MENU_W).max(work.left as f32 / scale)
+    } else {
+        logical_x
+    };
     let y = (logical_y - MENU_H).max(work.top as f32 / scale);
 
     let options = WindowOptions {
@@ -1781,28 +1845,25 @@ pub fn show_tray_menu(cx: &mut App, shared: Arc<SharedState>) {
                                 SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex_stripped.0 as isize);
                         }
 
-                        // Shrink to client area after stripping borders,
-                        // keeping the top-left corner fixed so the menu
-                        // stays at the cursor position with no side gaps.
+                        // After stripping borders, resize the window so
+                        // the client area exactly matches the intended menu
+                        // size. GPUI created the window with border offsets
+                        // baked in; now that borders are gone, the window
+                        // is too small, compressing the content.
                         let mut rc = RECT::default();
                         if GetWindowRect(hwnd, &mut rc).is_ok() {
-                            let mut client = RECT::default();
-                            let _ = GetClientRect(hwnd, &mut client);
-                            let dx = (rc.right - rc.left) - (client.right - client.left);
-                            let dy = (rc.bottom - rc.top) - (client.bottom - client.top);
-                            if dx > 0 || dy > 0 {
-                                let new_w = (rc.right - rc.left) - dx;
-                                let new_h = (rc.bottom - rc.top) - dy;
-                                let _ = SetWindowPos(
-                                    hwnd,
-                                    None,
-                                    rc.left,
-                                    rc.top,
-                                    new_w,
-                                    new_h,
-                                    SWP_FRAMECHANGED | SWP_NOZORDER | SWP_NOACTIVATE,
-                                );
-                            }
+                            let scale = system_scale();
+                            let target_w = (MENU_W * scale) as i32;
+                            let target_h = (MENU_H * scale) as i32;
+                            let _ = SetWindowPos(
+                                hwnd,
+                                None,
+                                rc.left,
+                                rc.top,
+                                target_w,
+                                target_h,
+                                SWP_FRAMECHANGED | SWP_NOZORDER | SWP_NOACTIVATE,
+                            );
                         }
 
                         // Topmost so the menu appears above other windows.
