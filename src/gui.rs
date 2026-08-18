@@ -35,18 +35,18 @@ use gpui_component::{ActiveTheme, Disableable, Selectable};
 
 // ── Color palette ─────────────────────────────────────────────────────
 //
-// The settings UI colors are derived from the Windows system theme:
-// the accent color is read from the registry, and the surface/border/
-// text colors follow the system light/dark mode. The Mica backdrop
-// provides the actual window background, so the card surface uses a
+// Settings UI colors are derived from the Windows system theme. The
+// accent color is read from the registry; surface, border, and text
+// colors follow the system light/dark mode. The Mica backdrop provides
+// the actual window background, so the card surface uses a
 // semi-transparent fill that lets Mica show through.
 
-/// The full color palette for the settings UI. Built from the live
-/// Windows system accent color and light/dark mode.
+/// Color palette for the settings UI. Built from the live Windows system
+/// accent color and light/dark mode.
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
 struct Theme {
-    /// Semi-transparent surface for the settings card, lets Mica show.
+    /// Semi-transparent surface for the settings card, lets Mica show through.
     surface: Hsla,
     control_bg: Hsla,
     control_bg_hover: Hsla,
@@ -81,8 +81,8 @@ impl Theme {
 
         if want_dark {
             Self {
-                // Semi-transparent so the acrylic blur shows through the
-                // card itself, frosted glass effect.
+            // Semi-transparent so the acrylic blur shows through the
+            // card itself, frosted glass effect.
                 surface: Hsla {
                     h: 0.0,
                     s: 0.0,
@@ -188,32 +188,33 @@ const SP_LG: f32 = 12.0;
 const SP_XL: f32 = 16.0;
 
 /// Padding of the window content, also used to map click positions back
-/// to slider values. Smaller than the original 20 px so the flyout looks
-/// like a compact tray popover rather than a framed card.
+/// to slider values. Smaller than 20 px so the flyout looks like a
+/// compact tray popover rather than a framed card.
 const CONTENT_PADDING: f32 = SP_XL;
 
 /// The flyout has no extra transparent margin around the content; the
 /// DWM-rounded client area is the same size as the rendered layout.
 const PANEL_MARGIN: f32 = 0.0;
 
-/// How long after the settings window opens before focus-out dismissals are
-/// honored. The flyout is activated programmatically, and Windows can deny
-/// that activation (SetForegroundWindow restrictions), firing `on_focus_out`
-/// right after open, which would kill the flyout before the user sees it.
-/// A deliberate outside click always comes later than this window.
+/// How long after the settings window opens before focus-out dismissals
+/// are honored. The flyout is activated programmatically, and Windows can
+/// deny that activation (SetForegroundWindow restrictions), firing
+/// `on_focus_out` right after open, which would kill the flyout before
+/// the user sees it. A deliberate outside click always comes later than
+/// this window.
 const OPEN_FOCUS_GRACE: Duration = Duration::from_millis(300);
 
-/// Embedded Inter font (SIL OFL-1.1, rsms/inter), registered at startup so
-/// the UI renders in Inter on any machine. Bundled because Inter is not a
-/// Windows system font and the app ships as one exe.
+/// Embedded Inter font (SIL OFL-1.1, rsms/inter), registered at startup
+/// so the UI renders in Inter on any machine. Bundled because Inter is
+/// not a Windows system font and the app ships as one exe.
 static INTER_REGULAR: &[u8] = include_bytes!("../assets/fonts/Inter-Regular.ttf");
 static INTER_MEDIUM: &[u8] = include_bytes!("../assets/fonts/Inter-Medium.ttf");
 
 
 /// The tray icon's on-screen rectangle in physical (device) pixels, as
 /// reported by Win32 (`Shell_NotifyIconGetRect`). Only the left/top/width
-/// matter for flyout placement (the window sits above the icon's top edge,
-/// centered on its horizontal extent).
+/// matter for flyout placement: the window sits above the icon's top edge,
+/// centered on its horizontal extent.
 #[derive(Clone, Copy, Debug)]
 struct IconRect {
     left: f64,
@@ -245,7 +246,7 @@ struct WorkArea {
 /// just above the tray icon when its position is known (centered on it
 /// horizontally), otherwise just above the taskbar's right edge (the work
 /// area's bottom-right corner, near the clock). Clamped to the work area so
-/// no layout, auto-hide taskbar, taskbar on an unusual edge, small screens:
+/// no layout, auto-hide taskbar, taskbar on an unusual edge, or small screen
 /// can push the window off-screen. `icon` and `work` are physical pixels;
 /// the result is in logical pixels for GPUI's window bounds.
 fn flyout_origin(
@@ -282,15 +283,15 @@ fn flyout_origin(
     )
 }
 
-/// The client size of the settings flyout, computed from the rows it actually
-/// shows so the window hugs its content like a native tray flyout. The width
-/// is fixed; the height is the sum of the visible rows plus the vertical
-/// padding and the gaps between them. Rows: the failure banner (only when the
-/// hook failed), the title row (with the wheel-mode toggle in its top-right
-/// corner), the scrolling-timeout stepper (always present, it's just faded
-/// and disabled when the toggle is off), the divider, and the
-/// Start-with-Windows checkbox. The render and the window sizing share these
-/// heights, so they can't drift.
+/// The client size of the settings flyout, computed from the rows it
+/// actually shows so the window hugs its content like a native tray
+/// flyout. The width is fixed; the height is the sum of the visible rows
+/// plus the vertical padding and the gaps between them. Rows: the failure
+/// banner (only when the hook failed), the title row (with the wheel-mode
+/// toggle in its top-right corner), the scrolling-timeout stepper (always
+/// present, faded and disabled when the toggle is off), the divider, and
+/// the Start-with-Windows checkbox. The render and the window sizing
+/// share these heights, so they can't drift.
 fn settings_window_size(hook_failed: bool) -> gpui::Size<Pixels> {
     // Narrow, minimal panel.
     const WIDTH: f32 = 280.0;
@@ -315,8 +316,8 @@ fn settings_window_size(hook_failed: bool) -> gpui::Size<Pixels> {
     const BANNER_H: f32 = 44.0;
 
     // Accumulate row heights and count without heap allocation. The row
-    // set depends only on hook status (the stepper row is always shown), so
-    // the maximum is 6 rows.
+    // set depends only on hook status (the stepper row is always shown),
+    // so the maximum is 6 rows.
     let mut row_sum = 0.0_f32;
     let mut row_count = 0_u32;
 
@@ -342,7 +343,7 @@ fn settings_window_size(hook_failed: bool) -> gpui::Size<Pixels> {
 
 /// The primary monitor's work area (desktop minus the taskbar) in physical
 /// pixels, via `SPI_GETWORKAREA`. Falls back to all-zeros (which the flyout
-/// clamp treats as the top-left corner) if the system call fails, it
+/// clamp treats as the top-left corner) if the system call fails, which
 /// effectively never does.
 fn primary_work_area() -> WorkArea {
     let mut rect = RECT::default();
@@ -364,7 +365,7 @@ fn primary_work_area() -> WorkArea {
 
 /// Scale factor of the primary display, used to convert physical-pixel
 /// positions from Win32 into GPUI logical pixels. Falls back to 1.0 (no
-/// scaling) if the DPI query fails, it effectively never does.
+/// scaling) if the DPI query fails, which effectively never does.
 fn system_scale() -> f32 {
     let dpi = unsafe { GetDpiForSystem() };
     if dpi == 0 {
@@ -467,9 +468,9 @@ impl SliderKind {
 pub struct SettingsView {
     shared: Arc<SharedState>,
     /// Focus handle for the window's root element. In GPUI 0.2.2, keyboard
-    /// events only reach elements on the focus path, so the root div must be
-    /// focused for its `on_key_down` handler (typing, arrow nudging, Tab,
-    /// Escape) to fire at all.
+    /// events only reach elements on the focus path, so the root div must
+    /// be focused for its `on_key_down` handler (typing, arrow nudging,
+    /// Tab, Escape) to fire at all.
     focus_handle: FocusHandle,
     /// Local mirror of wheel mode.
     wheel_mode: WheelMode,
@@ -516,10 +517,11 @@ impl SettingsView {
         cx: &mut Context<Self>,
     ) -> Self {
         // Poll shared state so external changes (e.g. a tray "Reset to
-        // Defaults") are reflected in an already-open window. The task holds
-        // a weak handle to the view, so it stops once the window is closed.
-        // A change can also alter the visible rows (wheel mode, hook failure
-        // banner), so the poll resizes the native window to hug the content.
+        // Defaults") are reflected in an already-open window. The task
+        // holds a weak handle to the view, so it stops once the window is
+        // closed. A change can also alter the visible rows (wheel mode,
+        // hook failure banner), so the poll resizes the native window to
+        // hug the content.
         cx.spawn(async move |this, cx| {
             loop {
                 gpui::Timer::after(Duration::from_millis(50)).await;
@@ -605,8 +607,8 @@ impl SettingsView {
     }
 
     /// Re-read all settings from shared state, returning true if anything
-    /// changed. Used to reflect external changes (such as a tray reset) in an
-    /// already-open window without re-saving the config.
+    /// changed. Used to reflect external changes (such as a tray reset) in
+    /// an already-open window without re-saving the config.
     fn refresh_from_shared(&mut self) -> bool {
         let mut changed = false;
 
@@ -622,19 +624,20 @@ impl SettingsView {
             changed = true;
         }
 
-        // The hook status isn't a user setting, but the warning banner depends
-        // on it, so track it to re-render when a retry succeeds or fails.
+        // The hook status isn't a user setting, but the warning banner
+        // depends on it, so track it to re-render when a retry succeeds
+        // or fails.
         let hook_status = self.shared.hook_status();
         if hook_status != self.hook_status {
             self.hook_status = hook_status;
             changed = true;
         }
 
-        // Refresh autostart from the registry so external changes (e.g. the
-        // user disabling it via Task Manager's startup tab) are reflected
-        // while the settings window is open. Throttled to once per second
-        // since registry access is heavier than atomic reads and the setting
-        // rarely changes.
+        // Refresh autostart from the registry so external changes (e.g.
+        // the user disabling it via Task Manager's startup tab) are
+        // reflected while the settings window is open. Throttled to once
+        // per second since registry access is heavier than atomic reads
+        // and the setting rarely changes.
         let now_secs = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs())
@@ -667,16 +670,16 @@ impl SettingsView {
     // --- Direct value entry ---
 
     fn start_edit(&mut self, kind: SliderKind) {
-        // Only meaningful while direction lock is on; the chip is faded and
-        // unclickable otherwise anyway (defensive).
+        // Only meaningful while direction lock is on; the chip is faded
+        // and unclickable otherwise anyway (defensive).
         if self.wheel_mode != WheelMode::DirectionLock {
             return;
         }
         self.editing = Some(kind);
         self.focused_slider = Some(kind);
-        // Start with an empty buffer so the user types a fresh value from
-        // scratch, clearer than pre-filling the current value and making
-        // them delete digits before typing.
+        // Start with an empty buffer so the user types a fresh value
+        // from scratch, clearer than pre-filling the current value and
+        // making them delete digits before typing.
         self.edit_buffer = String::new();
     }
 
@@ -795,8 +798,8 @@ impl Render for SettingsView {
             .size_full()
             .flex()
             .flex_col()
-            // Inter is embedded and registered at startup (see run_gui); it
-            // renders cleaner at small sizes than the OS default.
+            // Inter is embedded and registered at startup (see run_gui);
+            // it renders cleaner at small sizes than the OS default.
             .font_family("Inter")
             .text_color(theme.text_primary)
             .text_sm()
@@ -1107,9 +1110,9 @@ impl Render for SettingsView {
                     ),
             )
             // Open animation: a quick fade-in (ease-out) of the whole card
-            // on mount, like a native tray flyout. Runs once per window open
-            //, the animation state is per element id, so poll re-renders
-            // and mode switches don't restart it.
+            // on mount, like a native tray flyout. Runs once per window
+            // open; the animation state is per element id, so poll
+            // re-renders and mode switches don't restart it.
             .with_animation(
                 "flyout-in",
                 Animation::new(Duration::from_millis(180)).with_easing(ease_out_quint()),
@@ -1128,7 +1131,7 @@ struct StepperRowState {
 }
 
 /// Build the scrolling-timeout row: a centered label above a segmented
-/// ButtonGroup with three buttons, −, the clickable value chip, and +.
+/// ButtonGroup with three buttons: −, the clickable value chip, and +.
 /// Clicking the value chip enters edit mode (type a fresh number, Enter
 /// to commit). When `enabled` is false (wheel mode off) the whole row is
 /// faded and unclickable.
@@ -1141,9 +1144,9 @@ fn stepper_row(
 ) -> gpui::Div {
     let value_display = if state.is_editing {
         if state.edit_buffer.is_empty() {
-            // Show the current value as a faded placeholder so the user
-            // knows what they're replacing, with a cursor to indicate
-            // editing mode.
+    // Show the current value as a faded placeholder so the user
+    // knows what they're replacing, with a cursor to indicate
+    // editing mode.
             SharedString::from(format!("{}|", value_text))
         } else {
             SharedString::from(format!("{}|", state.edit_buffer))
@@ -1151,14 +1154,14 @@ fn stepper_row(
     } else {
         SharedString::from(value_text)
     };
-    // Owned copy so the closures can capture the palette without borrowing
-    // the parameter reference.
+    // Owned copy so the closures can capture the palette without
+    // borrowing the parameter reference.
     let t = *t;
     let editing = state.is_editing;
     let enabled = state.enabled;
 
-    // The custom variant gives the buttons the panel's colors instead of
-    // the gpui-component theme defaults.
+    // The custom variant gives the buttons the panel's colors instead
+    // of the gpui-component theme defaults.
     let variant = ButtonCustomVariant::new(cx)
         .color(t.control_bg)
         .foreground(t.text_primary)
@@ -1196,8 +1199,8 @@ fn stepper_row(
         }));
 
     // Middle button: the value chip. When editing, `.selected(true)`
-    // paints it with the accent color so it reads as active. Clicking it
-    // enters edit mode (only when enabled).
+    // paints it with the accent color so it reads as active. Clicking
+    // it enters edit mode (only when enabled).
     let value_btn = Button::new("value-timeout")
         .custom(variant)
         .label(value_display)
@@ -1240,11 +1243,11 @@ fn stepper_row(
 /// A tiny, never-shown window that keeps the application alive.
 ///
 /// GPUI's Windows platform quits the whole app when the *last* window is
-/// closed (`close_one_window` posts `WM_QUIT`). Without this anchor, closing
-/// the settings window, the app's only window, would kill the tray app
-/// every time. The anchor is created hidden at startup and deliberately
-/// leaked, so the settings window is never the last one and closing it just
-/// closes that window.
+/// closed (`close_one_window` posts `WM_QUIT`). Without this anchor,
+/// closing the settings window (the app's only window) would kill the
+/// tray app every time. The anchor is created hidden at startup and
+/// deliberately leaked, so the settings window is never the last one
+/// and closing it just closes that window.
 struct AnchorView;
 
 impl Render for AnchorView {
@@ -1257,8 +1260,8 @@ impl Render for AnchorView {
 /// settings window closes (see [`AnchorView`]). Called once at startup.
 pub fn open_anchor_window(cx: &mut App) -> Result<(), anyhow::Error> {
     let options = WindowOptions {
-        // Far off-screen and 1x1, and never shown, it is not visible
-        // anywhere (no taskbar entry, no Alt-Tab) and can never be closed.
+        // Far off-screen and 1x1, never shown, not visible anywhere
+        // (no taskbar entry, no Alt-Tab) and can never be closed.
         window_bounds: Some(gpui::WindowBounds::Windowed(gpui::Bounds::new(
             gpui::point(px(-10000.), px(-10000.)),
             gpui::size(px(1.), px(1.)),
@@ -1271,11 +1274,11 @@ pub fn open_anchor_window(cx: &mut App) -> Result<(), anyhow::Error> {
         ..Default::default()
     };
     let handle = cx.open_window(options, |_window, cx| cx.new(|_| AnchorView))?;
-    // WindowHandle is Copy, so dropping it does nothing, GPUI keeps the
-    // window alive in its internal window map for the lifetime of the app.
-    // The window is never shown and can't be closed by the user, so it
-    // is a permanent anchor that prevents the app from quitting when
-    // the settings window closes.
+    // WindowHandle is Copy, so dropping it does nothing; GPUI keeps
+    // the window alive in its internal window map for the lifetime of
+    // the app. The window is never shown and can't be closed by the
+    // user, so it is a permanent anchor that prevents the app from
+    // quitting when the settings window closes.
     let _ = handle;
     Ok(())
 }
@@ -1303,9 +1306,9 @@ pub fn open_settings_window(
     let options = WindowOptions {
         window_bounds: Some(gpui::WindowBounds::Windowed(gpui::Bounds::new(origin, size))),
         // PopUp maps to WS_EX_TOOLWINDOW with no caption on Windows: no
-        // taskbar button, no Alt-Tab entry, no min/max buttons, borderless:
-        // the look of a native tray flyout. Transparent so the root's rounded
-        // corners show the desktop instead of a black wedge.
+        // taskbar button, no Alt-Tab entry, no min/max buttons, borderless.
+        // The look of a native tray flyout. Transparent so the root's
+        // rounded corners show the desktop instead of a black wedge.
         kind: gpui::WindowKind::PopUp,
         titlebar: None,
         window_background: gpui::WindowBackgroundAppearance::Blurred,
@@ -1326,21 +1329,21 @@ pub fn open_settings_window(
         cx.new(|cx| SettingsView::new(shared, Box::new(on_config_change), cx))
     })?;
 
-    // Keyboard events only reach the focused element in this GPUI version, so
-    // focus the root element on open to enable typing, arrow nudging, and
-    // Escape-to-close. Also register the native flyout behavior: losing
-    // focus (clicking anywhere outside, Alt-Tab, opening the tray menu)
-    // dismisses the window. The subscription is kept in the view so the
-    // listener lives exactly as long as the window does.
+    // Keyboard events only reach the focused element in this GPUI version,
+    // so focus the root element on open to enable typing, arrow nudging,
+    // and Escape-to-close. Also register the native flyout behavior:
+    // losing focus (clicking anywhere outside, Alt-Tab, opening the tray
+    // menu) dismisses the window. The subscription is kept in the view so
+    // the listener lives exactly as long as the window does.
     handle.update(cx, |view, window, cx| {
         view.focus_handle.focus(window);
         let listener_shared = shared_state.clone();
-        // The window is activated programmatically, which Windows can deny
-        // (SetForegroundWindow restrictions), so the focus churn around a
-        // tray-click open can fire on_focus_out a moment after opening and
-        // kill the flyout before the user sees it. Ignore focus-out during a
-        // short grace period after open, a deliberate outside click always
-        // comes later than this.
+        // The window is activated programmatically, which Windows can
+        // deny (SetForegroundWindow restrictions), so the focus churn
+        // around a tray-click open can fire on_focus_out a moment after
+        // opening and kill the flyout before the user sees it. Ignore
+        // focus-out during a short grace period after open; a deliberate
+        // outside click always comes later than this.
         let opened_at = Instant::now();
         view.focus_out_sub = Some(window.on_focus_out(
             &view.focus_handle,
@@ -1355,17 +1358,19 @@ pub fn open_settings_window(
         ));
 
         // A tray flyout must draw above foreground and fullscreen windows.
-        // GPUI's PopUp maps to a plain tool window without WS_EX_TOPMOST, so
-        // pin the native window topmost through its raw handle, and publish
-        // its on-screen rect so the hook can dismiss it on outside clicks.
-        // Also strip any caption/border/size styles gpui's window class or
-        // Windows added, so the flyout is a clean, non-resizable client-area
-        // rectangle (no dialog frame, no resize border, it's a tray window).
+        // GPUI's PopUp maps to a plain tool window without WS_EX_TOPMOST,
+        // so pin the native window topmost through its raw handle, and
+        // publish its on-screen rect so the hook can dismiss it on outside
+        // clicks. Also strip any caption/border/size styles gpui's window
+        // class or Windows added, so the flyout is a clean, non-resizable
+        // client-area rectangle (no dialog frame, no resize border; it's
+        // a tray window).
         if let Ok(native) = window.window_handle() {
             if let RawWindowHandle::Win32(win32) = native.as_raw() {
                 let hwnd = HWND(win32.hwnd.get() as *mut _);
-                // Remember the native handle and the starting client height so
-                // the refresh poll can resize the window to its content.
+                // Remember the native handle and the starting client
+                // height so the refresh poll can resize the window to
+                // its content.
                 view.hwnd = hwnd.0 as isize;
                 view.client_h = size.height.into();
                 unsafe {
@@ -1397,7 +1402,7 @@ pub fn open_settings_window(
                     // After stripping styles, resize the window so the
                     // client area exactly matches the intended content
                     // size. GPUI created the window with border offsets
-                    // baked in, now that borders are gone, the window is
+                    // baked in; now that borders are gone, the window is
                     // too large, leaving acrylic visible around the card.
                     let mut rc = RECT::default();
                     if GetWindowRect(hwnd, &mut rc).is_ok() {
@@ -1435,10 +1440,11 @@ pub fn open_settings_window(
                     );
 
                     // Override the acrylic blur tint with a darker color.
-                    // GPUI's Blurred mode sets acrylic with a near-transparent
-                    // tint (0,0,0,0). We re-apply it with a dark, semi-opaque
-                    // tint so the window has a dark frosted glass backing
-                    // without needing a card background fill.
+                    // GPUI's Blurred mode sets acrylic with a
+                    // near-transparent tint (0,0,0,0). We re-apply it with
+                    // a dark, semi-opaque tint so the window has a dark
+                    // frosted glass backing without needing a card
+                    // background fill.
                     let want_dark = !crate::theme::is_light_mode();
                     set_acrylic_tint(hwnd, want_dark);
                     let dark = if !crate::theme::is_light_mode() {
@@ -1461,9 +1467,10 @@ pub fn open_settings_window(
                         &corner as *const _ as *const _,
                         std::mem::size_of::<i32>() as u32,
                     );
-                    // Windows 11 draws a thin border around rounded windows by
-                    // default, which makes the flyout look like a card sitting
-                    // inside a window. Suppress it so the surface is flush.
+                    // Windows 11 draws a thin border around rounded windows
+                    // by default, which makes the flyout look like a card
+                    // sitting inside a window. Suppress it so the surface
+                    // is flush.
                     let border_color = DWMWA_COLOR_NONE;
                     let _ = DwmSetWindowAttribute(
                         hwnd,
@@ -1483,6 +1490,369 @@ pub fn open_settings_window(
     })?;
 
     Ok(handle)
+}
+
+// ── Tray context menu ─────────────────────────────────────────────────
+//
+// A borderless GPUI PopUp window anchored at the cursor, rendering
+// hand-styled menu items directly on the acrylic blur, same approach
+// as the settings flyout, so there's no "window inside a window".
+// Replaces the native tray-icon menu with a GPUI-rendered one so it
+// inherits the app's system accent color and dark/light theme.
+
+use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+
+/// The tray context menu view. Renders hand-styled items directly on the
+/// acrylic, no card wrapper. Dismisses with a fade-out on focus loss or
+/// Escape.
+pub struct TrayMenuView {
+    focus_handle: FocusHandle,
+    theme: Theme,
+    /// When true, the menu is fading out prior to window removal.
+    dismissing: bool,
+    _focus_out_sub: Subscription,
+}
+
+impl Render for TrayMenuView {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = self.theme;
+
+        // Settings item: gear icon + label.
+        let settings_item = menu_item_row(
+            "tray-item-settings",
+            "icons/settings.svg",
+            "Settings",
+            crate::tray::TrayAction::Settings,
+            t,
+            cx,
+        );
+
+        // Quit item: door-exit icon + label.
+        let quit_item = menu_item_row(
+            "tray-item-quit",
+            "icons/door-exit.svg",
+            "Quit",
+            crate::tray::TrayAction::Quit,
+            t,
+            cx,
+        );
+
+        div()
+            .id("tray-menu-root")
+            .track_focus(&self.focus_handle)
+            .size_full()
+            .flex()
+            .flex_col()
+            .pt(px(8.))
+            .pb(px(4.))
+            .px(px(2.))
+            .gap(px(2.))
+            .font_family("Inter")
+            .text_sm()
+            .text_color(t.text_primary)
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                if event.keystroke.key.as_str() == "escape" {
+                    this.start_dismiss(window, cx);
+                }
+            }))
+            .child(settings_item)
+            // Divider between Settings and Quit, full width with small
+            // vertical margin, using a visible border color.
+            .child(
+                div()
+                    .h(px(1.))
+                    .w_full()
+                    .my(px(2.))
+                    .bg(Hsla {
+                        h: t.border.h,
+                        s: t.border.s,
+                        l: t.border.l,
+                        a: 0.8,
+                    }),
+            )
+            .child(quit_item)
+            // Fade-in on open only. Dismiss is instant.
+            .with_animation(
+                "tray-menu-fade",
+                Animation::new(Duration::from_millis(80)).with_easing(ease_out_quint()),
+                |this, delta| this.opacity(delta),
+            )
+    }
+}
+
+impl TrayMenuView {
+    /// Start the fade-out dismiss. The window is removed after the
+    /// fade-out animation completes.
+    fn start_dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.dismissing {
+            return;
+        }
+        self.dismissing = true;
+        cx.notify();
+        // Remove the window immediately, no fade, no delay.
+        window.remove_window();
+    }
+}
+
+/// Build a single menu item row: icon + label, hover/active states,
+/// click emits the action and closes the window.
+fn menu_item_row(
+    id: &'static str,
+    icon_path: &'static str,
+    label: &'static str,
+    action: crate::tray::TrayAction,
+    t: Theme,
+    cx: &mut Context<TrayMenuView>,
+) -> impl IntoElement {
+    div()
+        .id(id)
+        .flex()
+        .flex_row()
+        .items_center()
+        .w_full()
+        .gap(px(8.))
+        .h(px(36.))
+        .px(px(6.))
+        .rounded(px(6.))
+        .cursor_pointer()
+        .text_color(t.text_primary)
+        .font_weight(gpui::FontWeight::MEDIUM)
+        .hover(|s| s.bg(t.control_bg_hover))
+        .active(|s| s.bg(t.control_bg))
+        .on_click(cx.listener(move |this, _event, window, cx| {
+            crate::tray::poll_menu_action(action);
+            this.start_dismiss(window, cx);
+        }))
+        // Wrap icon in a fixed-size flex container so it centers
+        // vertically with the text baseline.
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .justify_center()
+                .w(px(20.))
+                .h(px(20.))
+                .child(
+                    svg()
+                        .path(icon_path)
+                        .w(px(18.))
+                        .h(px(18.))
+                        .text_color(t.text_secondary),
+                ),
+        )
+        .child(label)
+}
+
+/// Get the cursor position in physical pixels.
+fn cursor_pos() -> (i32, i32) {
+    let mut p = windows::Win32::Foundation::POINT::default();
+    unsafe {
+        let _ = GetCursorPos(&mut p);
+    }
+    (p.x, p.y)
+}
+
+/// Track the open tray menu window so only one exists at a time.
+/// Stored as a global so `show_tray_menu` can close the previous one.
+static TRAY_MENU_WINDOW: std::sync::OnceLock<
+    std::sync::Mutex<Option<gpui::WindowHandle<TrayMenuView>>>,
+> = std::sync::OnceLock::new();
+
+fn tray_menu_slot() -> &'static std::sync::Mutex<Option<gpui::WindowHandle<TrayMenuView>>> {
+    TRAY_MENU_WINDOW.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+/// Close the tray menu if it's open, and clear the hook's rect.
+/// Called from the main poll loop when the hook detects an outside click.
+pub fn close_tray_menu(cx: &mut App, shared: &Arc<SharedState>) {
+    if let Ok(mut slot) = tray_menu_slot().lock() {
+        if let Some(handle) = slot.take() {
+            shared.set_settings_rect(None);
+            let _ = handle.update(cx, |_, window, _| window.remove_window());
+        }
+    }
+}
+
+/// Open a borderless GPUI window at the cursor position containing
+/// hand-styled menu items for "Settings" and "Quit". If a menu is
+/// already open, it's closed first so only one ever exists.
+pub fn show_tray_menu(cx: &mut App, shared: Arc<SharedState>) {
+    // Close any existing tray menu window (instant, no fade; it's
+    // being replaced).
+    if let Ok(mut slot) = tray_menu_slot().lock() {
+        if let Some(old) = slot.take() {
+            let _ = old.update(cx, |_, window, _| window.remove_window());
+        }
+    }
+
+    let (cur_x, cur_y) = cursor_pos();
+    let scale = system_scale();
+    let logical_x = cur_x as f32 / scale;
+    let logical_y = cur_y as f32 / scale;
+
+    // Menu dimensions: two items at 36px + 1px divider + 2px my + 2px gap
+    // + 8px top padding + 4px bottom padding.
+    const MENU_W: f32 = 148.0;
+    const MENU_H: f32 = 2.0 * 36.0 + 1.0 + 2.0 * 2.0 + 2.0 * 2.0 + 8.0 + 4.0;
+
+    // Position: open upward and to the left from the cursor, like a
+    // right-click context menu. Clamp so it stays on screen.
+    let work = primary_work_area();
+    let x = (logical_x - MENU_W).max(work.left as f32 / scale);
+    let y = (logical_y - MENU_H).max(work.top as f32 / scale);
+
+    let options = WindowOptions {
+        window_bounds: Some(gpui::WindowBounds::Windowed(gpui::Bounds::new(
+            point(px(x), px(y)),
+            gpui::size(px(MENU_W), px(MENU_H)),
+        ))),
+        kind: gpui::WindowKind::PopUp,
+        titlebar: None,
+        window_background: gpui::WindowBackgroundAppearance::Blurred,
+        focus: true,
+        show: true,
+        is_movable: false,
+        is_resizable: false,
+        is_minimizable: false,
+        ..Default::default()
+    };
+
+    let result = cx.open_window(options, |window, cx| {
+        let focus_handle = cx.focus_handle();
+
+        // on_focus_out is unreliable for PopUp windows on Windows; the
+        // activation model doesn't always fire it. We use a poll task
+        // below instead, but keep a no-op subscription for the focus
+        // handle to prevent unused warnings.
+        let focus_out_sub = window.on_focus_out(
+            &focus_handle,
+            cx,
+            move |_event, _window, _cx| {},
+        );
+
+        cx.new(|_cx| TrayMenuView {
+            focus_handle,
+            theme: Theme::system(),
+            dismissing: false,
+            _focus_out_sub: focus_out_sub,
+        })
+    });
+
+    if let Ok(handle) = result {
+        // Track the window so a subsequent right-click can close it.
+        if let Ok(mut slot) = tray_menu_slot().lock() {
+            *slot = Some(handle);
+        }
+
+        // Apply native window styling: strip borders, set topmost, round
+        // corners, apply acrylic tint, same treatment as the settings
+        // flyout for a consistent native look.
+        let shared_for_rect = shared.clone();
+        handle.update(cx, |view, window, _cx| {
+            view.focus_handle.focus(window);
+
+            if let Ok(native) = window.window_handle() {
+                if let RawWindowHandle::Win32(win32) = native.as_raw() {
+                    let hwnd = HWND(win32.hwnd.get() as *mut _);
+                    unsafe {
+                        // Strip caption/border styles for a clean popup.
+                        let style = WINDOW_STYLE(GetWindowLongPtrW(hwnd, GWL_STYLE) as u32);
+                        let stripped = style
+                            & !(WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MAXIMIZEBOX
+                                | WS_MINIMIZEBOX);
+                        if stripped != style {
+                            let _ = SetWindowLongPtrW(hwnd, GWL_STYLE, stripped.0 as isize);
+                            let _ = SetWindowPos(
+                                hwnd,
+                                None,
+                                0,
+                                0,
+                                0,
+                                0,
+                                SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER
+                                    | SWP_NOACTIVATE,
+                            );
+                        }
+                        let ex_style =
+                            WINDOW_EX_STYLE(GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32);
+                        let ex_stripped = ex_style & !(WS_EX_CLIENTEDGE | WS_EX_WINDOWEDGE);
+                        if ex_stripped != ex_style {
+                            let _ =
+                                SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex_stripped.0 as isize);
+                        }
+
+                        // Shrink to client area after stripping borders,
+                        // keeping the top-left corner fixed so the menu
+                        // stays at the cursor position with no side gaps.
+                        let mut rc = RECT::default();
+                        if GetWindowRect(hwnd, &mut rc).is_ok() {
+                            let mut client = RECT::default();
+                            let _ = GetClientRect(hwnd, &mut client);
+                            let dx = (rc.right - rc.left) - (client.right - client.left);
+                            let dy = (rc.bottom - rc.top) - (client.bottom - client.top);
+                            if dx > 0 || dy > 0 {
+                                let new_w = (rc.right - rc.left) - dx;
+                                let new_h = (rc.bottom - rc.top) - dy;
+                                let _ = SetWindowPos(
+                                    hwnd,
+                                    None,
+                                    rc.left,
+                                    rc.top,
+                                    new_w,
+                                    new_h,
+                                    SWP_FRAMECHANGED | SWP_NOZORDER | SWP_NOACTIVATE,
+                                );
+                            }
+                        }
+
+                        // Topmost so the menu appears above other windows.
+                        let _ = SetWindowPos(
+                            hwnd,
+                            Some(HWND_TOPMOST),
+                            0,
+                            0,
+                            0,
+                            0,
+                            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+                        );
+
+                        // Acrylic tint + dark mode + rounded corners.
+                        let want_dark = !crate::theme::is_light_mode();
+                        set_acrylic_tint(hwnd, want_dark);
+                        let dark = if want_dark { 1i32 } else { 0i32 };
+                        let _ = DwmSetWindowAttribute(
+                            hwnd,
+                            DWMWA_USE_IMMERSIVE_DARK_MODE,
+                            &dark as *const _ as *const _,
+                            std::mem::size_of::<i32>() as u32,
+                        );
+                        let corner = DWMWCP_ROUND.0;
+                        let _ = DwmSetWindowAttribute(
+                            hwnd,
+                            DWMWA_WINDOW_CORNER_PREFERENCE,
+                            &corner as *const _ as *const _,
+                            std::mem::size_of::<i32>() as u32,
+                        );
+                        let border_color = DWMWA_COLOR_NONE;
+                        let _ = DwmSetWindowAttribute(
+                            hwnd,
+                            DWMWA_BORDER_COLOR,
+                            &border_color as *const _ as *const _,
+                            std::mem::size_of::<u32>() as u32,
+                        );
+
+                        // Publish the menu's on-screen rect to the hook
+                        // so outside clicks dismiss it, same as the
+                        // settings flyout.
+                        let mut rc = RECT::default();
+                        if GetWindowRect(hwnd, &mut rc).is_ok() {
+                            shared_for_rect.set_settings_rect(Some((rc.left, rc.top, rc.right, rc.bottom)));
+                        }
+                    }
+                }
+            }
+        }).ok();
+    }
 }
 
 /// Launch the GPUI application with a callback for the launch event. The

@@ -280,16 +280,23 @@ fn main() {
                         poll_shared.set_settings_rect(None);
                         let _ = handle.update(cx, |_, window, _| window.remove_window());
                     }
+                    // Also close the tray menu if it's open.
+                    cx.update(|cx| {
+                        gui::close_tray_menu(cx, &poll_shared);
+                    })
+                    .ok();
                 }
 
-                // Check for tray menu events, tray icon clicks, and
+                // Check for tray icon clicks, GPUI menu actions, and
                 // second-launch signals (another instance started). A
-                // tray-icon left-click *toggles* the settings flyout (open if
-                // closed, close if open), like the native volume/network
-                // flyouts; the menu Settings item and a second launch always
-                // open or bring it forward.
+                // tray-icon left-click *toggles* the settings flyout (open
+                // if closed, close if open), like the native
+                // volume/network flyouts; a right-click opens the GPUI
+                // context menu; a second launch always opens or brings it
+                // forward.
                 let tray_click = tray::poll_tray_click();
-                if let Some(action) = tray::poll_menu_event()
+                let menu_action = tray::take_menu_action();
+                if let Some(action) = menu_action
                     .or(tray_click)
                     .or_else(|| {
                         single_instance::poll_second_launch()
@@ -297,6 +304,13 @@ fn main() {
                     })
                 {
                     match action {
+                        TrayAction::ShowMenu => {
+                            let shared_for_menu = poll_shared.clone();
+                            cx.update(|cx| {
+                                gui::show_tray_menu(cx, shared_for_menu);
+                            })
+                            .ok();
+                        }
                         TrayAction::Settings => {
                             let shared_for_window = poll_shared.clone();
                             cx.update(|cx| {

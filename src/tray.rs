@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use tray_icon::menu::{Menu, MenuEvent, MenuId, MenuItem};
 use tray_icon::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSMICON};
 
@@ -7,41 +6,23 @@ use crate::config::WheelMode;
 use crate::hook::SharedState;
 use crate::theme;
 
-/// Menu IDs for identifying which item was clicked.
-const ID_SETTINGS: &str = "settings";
-const ID_QUIT: &str = "quit";
-
-/// Manages the system tray icon and its menu. Deliberately minimal: just
-/// Settings and Quit. Mode toggling lives in the settings window.
+/// Manages the system tray icon. The context menu is rendered as a GPUI
+/// popup window (see `gui::show_tray_menu`), so the tray icon itself is
+/// icon-only: no native menu is attached. Left-click opens settings,
+/// right-click opens the GPUI context menu.
 pub struct Tray {
     _tray: TrayIcon,
-    /// Keep menu items alive, they're referenced by the tray internally.
-    _menu: Menu,
 }
 
 impl Tray {
-    /// Create the tray icon and menu.
+    /// Create the tray icon (no native menu).
     /// `shared` is used to read the current wheel-mode for the icon color.
     pub fn new(shared: &Arc<SharedState>) -> Result<Self, String> {
-        let menu = Menu::new();
-
-        let settings_item = MenuItem::with_id(ID_SETTINGS, "Settings", true, None);
-        let quit_item = MenuItem::with_id(ID_QUIT, "Quit", true, None);
-
-        menu.append(&settings_item)
-            .map_err(|e| format!("Failed to append settings: {e}"))?;
-        menu.append(&quit_item)
-            .map_err(|e| format!("Failed to append quit: {e}"))?;
-
         // Create the tray icon (color reflects the current wheel mode).
         let icon = create_tray_icon(shared.wheel_mode());
 
         let tray = TrayIconBuilder::new()
-            .with_menu(Box::new(menu.clone()))
-            // Left-click is reserved for opening the settings window, so the
-            // context menu must only appear on right-click. tray_icon
-            // defaults to showing the menu on left-click too, which popped
-            // the menu on any left click (and could even do so at launch).
+            // No native menu; right-click is handled by the GPUI popup.
             .with_menu_on_left_click(false)
             .with_tooltip("Sabitori")
             .with_icon(icon)
@@ -50,7 +31,6 @@ impl Tray {
 
         Ok(Self {
             _tray: tray,
-            _menu: menu,
         })
     }
 
@@ -82,35 +62,42 @@ const TRAY_DARK_OFF: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/tray-dark
 pub enum TrayAction {
     Settings,
     Quit,
+    /// Show the GPUI-rendered context menu at the cursor.
+    ShowMenu,
 }
 
-/// Poll for tray menu events and map them to actions.
-/// Call this from the main/GPUI thread's event handling.
-pub fn poll_menu_event() -> Option<TrayAction> {
-    // MenuEvent::receiver() is a crossbeam channel receiver.
-    // We try_recv to check for events without blocking.
-    let receiver = MenuEvent::receiver();
-    match receiver.try_recv() {
-        Ok(event) => map_menu_event(&event.id),
-        Err(_) => None,
+/// A shared slot for actions emitted by the GPUI tray menu (which runs
+/// in a separate window and can't use the native MenuEvent channel).
+/// Only one action is ever pending at a time (the menu closes on click),
+/// so a single atomic is sufficient.
+static PENDING_MENU_ACTION: std::sync::OnceLock<std::sync::Mutex<Option<TrayAction>>> =
+    std::sync::OnceLock::new();
+
+fn pending_action_slot() -> &'static std::sync::Mutex<Option<TrayAction>> {
+    PENDING_MENU_ACTION.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+/// Called from the GPUI tray menu's click handler to queue an action.
+pub fn poll_menu_action(action: TrayAction) {
+    if let Ok(mut slot) = pending_action_slot().lock() {
+        *slot = Some(action);
     }
 }
 
-fn map_menu_event(id: &MenuId) -> Option<TrayAction> {
-    match id.0.as_str() {
-        ID_SETTINGS => Some(TrayAction::Settings),
-        ID_QUIT => Some(TrayAction::Quit),
-        _ => None,
+/// Drain a pending GPUI tray menu action, if any.
+pub fn take_menu_action() -> Option<TrayAction> {
+    if let Ok(mut slot) = pending_action_slot().lock() {
+        return slot.take();
     }
+    None
 }
 
-/// Poll for tray icon mouse events and map a left-click to the Settings
-/// action, so a single M1 click on the tray icon opens the settings window.
+/// Poll for tray icon mouse events. A left-click opens the settings
+/// window; a right-click opens the GPUI-rendered context menu (instead
+/// of the native menu, which is not attached to the tray icon).
 ///
-/// The context menu itself is shown automatically by the tray on right-click;
-/// left-clicks reach us through this separate event channel. The Windows-only
-/// `DoubleClick` event is deliberately ignored, it arrives after the two
-/// single-click events that already covered it.
+/// The Windows-only `DoubleClick` event is deliberately ignored, it
+/// arrives after the two single-click events that already covered it.
 pub fn poll_tray_click() -> Option<TrayAction> {
     let receiver = TrayIconEvent::receiver();
     let mut action = None;
@@ -118,12 +105,16 @@ pub fn poll_tray_click() -> Option<TrayAction> {
     // stale events to be processed on a later poll.
     while let Ok(event) = receiver.try_recv() {
         if let TrayIconEvent::Click {
-            button: MouseButton::Left,
+            button,
             button_state: MouseButtonState::Up,
             ..
         } = event
         {
-            action = Some(TrayAction::Settings);
+            match button {
+                MouseButton::Left => action = Some(TrayAction::Settings),
+                MouseButton::Right => action = Some(TrayAction::ShowMenu),
+                _ => {}
+            }
         }
     }
     action
@@ -187,22 +178,14 @@ mod tests {
     }
 
     #[test]
-    fn map_menu_event_known_ids() {
-        assert_eq!(
-            map_menu_event(&MenuId::new(ID_SETTINGS)),
-            Some(TrayAction::Settings)
-        );
-        assert_eq!(
-            map_menu_event(&MenuId::new(ID_QUIT)),
-            Some(TrayAction::Quit)
-        );
-    }
+    fn menu_action_roundtrip() {
+        // poll_menu_action -> take_menu_action should deliver the action.
+        poll_menu_action(TrayAction::Settings);
+        assert_eq!(take_menu_action(), Some(TrayAction::Settings));
+        assert_eq!(take_menu_action(), None);
 
-    #[test]
-    fn map_menu_event_unknown_id_returns_none() {
-        assert_eq!(
-            map_menu_event(&MenuId::new("nonexistent")),
-            None
-        );
+        poll_menu_action(TrayAction::Quit);
+        assert_eq!(take_menu_action(), Some(TrayAction::Quit));
+        assert_eq!(take_menu_action(), None);
     }
 }

@@ -20,6 +20,8 @@ impl AssetSource for IconAssets {
             "icons/mouse.svg" => include_bytes!("../assets/icons/mouse.svg"),
             "icons/mouse-off.svg" => include_bytes!("../assets/icons/mouse-off.svg"),
             "icons/arrows-move-vertical.svg" => include_bytes!("../assets/icons/arrows-move-vertical.svg"),
+            "icons/door-exit.svg" => include_bytes!("../assets/icons/door-exit.svg"),
+            "icons/settings.svg" => include_bytes!("../assets/icons/settings.svg"),
             "icons/check.svg" => CHECK_ICON_SVG.as_bytes(),
             "icons/warning.svg" => WARNING_ICON_SVG.as_bytes(),
             _ => return Ok(None),
